@@ -12,6 +12,7 @@ WWP nail studio — два Telegram-бота в одной программе.
 """
 import asyncio
 import base64
+import html
 import json
 import logging
 import os
@@ -115,7 +116,7 @@ def app_keyboard() -> ReplyKeyboardMarkup:
 async def notify_master(text: str):
     if ADMIN_ID:
         try:
-            await admin_bot.send_message(ADMIN_ID, text)
+            await admin_bot.send_message(ADMIN_ID, text, parse_mode="HTML")
         except Exception as e:  # noqa: BLE001
             logging.warning("Не удалось отправить уведомление мастеру: %s", e)
     else:
@@ -171,15 +172,20 @@ async def on_order(message: Message):
     )
 
     mood = MOODS.get(data.get("mood"), "")
+    day, _, hours = when.partition(" · ")
+    e = html.escape
+    client = (f"@{e(u.username)} ({e(u.full_name)})" if u.username
+              else f'<a href="tg://user?id={u.id}">{e(u.full_name)}</a> (без юзернейма)')
     await notify_master(
-        "🆕 Новая запись\n\n"
-        f"🗓 {when}\n"
-        f"Клиент: {who} (id {u.id})\n"
-        f"{items}\n"
+        "🆕 <b>Новая запись</b>\n\n"
+        f"📅 Дата: <b>{e(day)}</b>\n"
+        f"🕐 Время: <b>{e(hours or slot[11:])}</b>\n"
+        f"👤 Клиент: {client}\n\n"
+        + "\n".join(f"💅 {e(i)}" for i in data.get("items", []) if not i.startswith("Атмосфера")) + "\n"
         + (f"Атмосфера: {mood}\n" if mood else "")
-        + f"Итого: {total_text}\n"
-        f"Комментарий: {comment}\n\n"
-        f"Написать клиенту: tg://user?id={u.id}"
+        + f"Итого: <b>{total_text}</b>\n"
+        f"Комментарий: {e(comment)}\n\n"
+        f'<a href="tg://user?id={u.id}">✉️ Написать клиенту</a>'
     )
     await publish_busy()
 
