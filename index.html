@@ -294,8 +294,8 @@ function fur(canvas, cssW, cssH, drawMask, opt){
   const mix=function(a,b,t){return a.map(function(v,i){return Math.round(v+(b[i]-v)*t)})};
   const c0=hex(opt.c0), c1=hex(opt.c1), c2=hex(opt.c2);
   const shadeCol=function(t){return t<0.5?mix(c0,c1,t*2):mix(c1,c2,(t-0.5)*2)};
-  ctx.save(); ctx.filter='blur('+(opt.shadow*s)+'px)'; ctx.globalAlpha=.85; ctx.drawImage(m,0,opt.shadow*0.75*s); ctx.restore();
-  ctx.save(); ctx.globalCompositeOperation='source-in'; ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); ctx.restore();
+  ctx.save(); ctx.filter='blur('+(opt.shadow*s)+'px)'; ctx.globalAlpha=.6; ctx.drawImage(m,0,opt.shadow*0.75*s); ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation='source-in'; ctx.fillStyle='#2a0c1c'; ctx.fillRect(0,0,W,H); ctx.restore();
   const u=document.createElement('canvas'); u.width=W; u.height=H; const uc=u.getContext('2d');
   uc.filter='blur('+(1.5*s)+'px)'; uc.drawImage(m,0,0); uc.globalCompositeOperation='source-in';
   uc.fillStyle='rgb('+shadeCol(0.28)+')'; uc.fillRect(0,0,W,H); ctx.drawImage(u,0,0);
