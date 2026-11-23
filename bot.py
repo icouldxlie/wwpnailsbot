@@ -1,27 +1,27 @@
 """
-Telegram-бот записи к мастеру с Mini App.
+WWP nail studio — Telegram-бот записи с Mini App.
 
-Пользователь жмёт /start → под полем ввода появляется кнопка «💅 Открыть приложение».
-В приложении выбирает услугу → нажимает «Записаться» → бот получает заявку,
-благодарит клиента и пересылает заявку мастеру (ADMIN_ID).
+/start → кнопка «💅 Открыть приложение» → клиент выбирает услугу, дату и время →
+бот сохраняет запись, занимает окошко и присылает заявку мастеру.
+
+Команды мастера:
+  /bookings                 — ближайшие записи
+  /free 2026-11-24 12:00    — освободить окошко (если клиент отменил)
 """
 import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
-from aiogram.types import (
-    KeyboardButton,
-    MenuButtonWebApp,
-    Message,
-    ReplyKeyboardMarkup,
-    WebAppInfo,
-)
+from aiogram.filters import Command, CommandStart
+from aiogram.types import KeyboardButton, MenuButtonDefault, Message, ReplyKeyboardMarkup, WebAppInfo
 from dotenv import load_dotenv
 
-ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+HERE = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = os.path.join(HERE, ".env")
+BOOKINGS_PATH = os.path.join(HERE, "bookings.json")
 load_dotenv(ENV_PATH)
 
 
@@ -47,25 +47,55 @@ dp = Dispatcher()
 MOODS = {"silence": "☁️ хочет посидеть в тишине", "talk": "🌸 хочет поговорить с мастером"}
 
 
+# ---------- записи ----------
+def load_bookings() -> list:
+    try:
+        with open(BOOKINGS_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def save_bookings(items: list):
+    with open(BOOKINGS_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=1)
+
+
+def upcoming() -> list:
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    return sorted((b for b in load_bookings() if b["slot"] >= now), key=lambda b: b["slot"])
+
+
 def app_keyboard() -> ReplyKeyboardMarkup:
-    # Именно reply-кнопка: только с неё приложение может вернуть заявку боту (sendData)
+    # Ссылка несёт занятые окошки, чтобы приложение их зачеркнуло.
+    # Именно reply-кнопка: только с неё приложение может вернуть заявку боту (sendData).
+    busy = ",".join(b["slot"] for b in upcoming())
+    url = WEBAPP_URL + (("?busy=" + busy) if busy else "")
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="💅 Открыть приложение", web_app=WebAppInfo(url=WEBAPP_URL))]],
+        keyboard=[[KeyboardButton(text="💅 Открыть приложение", web_app=WebAppInfo(url=url))]],
         resize_keyboard=True,
     )
 
 
+def is_admin(message: Message) -> bool:
+    return bool(ADMIN_ID) and message.from_user.id == ADMIN_ID
+
+
+# ---------- клиент ----------
 @dp.message(CommandStart())
 async def start(message: Message):
     global ADMIN_ID
     if not ADMIN_ID:
         ADMIN_ID = message.from_user.id
         save_env("ADMIN_ID", str(ADMIN_ID))
-        await message.answer("👑 Вы назначены мастером — заявки клиентов будут приходить сюда.")
+        await message.answer(
+            "👑 Вы назначены мастером — заявки клиентов будут приходить сюда.\n\n"
+            "/bookings — ближайшие записи\n/free 2026-11-24 12:00 — освободить окошко"
+        )
     await message.answer(
-        f"Привет! Я помощник мастера {MASTER_NAME} 🤍\n\n"
-        "Здесь можно записаться на маникюр, Таро, разбор матрицы судьбы, "
-        "натальной карты или чакр.\n\n"
+        "Добро пожаловать в WWP nail studio 🤍\n\n"
+        f"Здесь можно записаться к мастеру {MASTER_NAME} на маникюр, "
+        "а также на Таро, разбор матрицы судьбы, натальной карты или чакр.\n\n"
         "Нажмите кнопку внизу, чтобы открыть приложение 👇",
         reply_markup=app_keyboard(),
     )
@@ -75,28 +105,43 @@ async def start(message: Message):
 async def on_order(message: Message):
     try:
         data = json.loads(message.web_app_data.data)
-    except json.JSONDecodeError:
-        await message.answer("Не получилось прочитать заявку, попробуйте ещё раз 🙏")
+        slot = data["slot"]
+        datetime.strptime(slot, "%Y-%m-%dT%H:%M")
+    except (json.JSONDecodeError, KeyError, ValueError):
+        await message.answer("Не получилось прочитать заявку, попробуйте ещё раз 🙏", reply_markup=app_keyboard())
         return
 
+    bookings = load_bookings()
+    if any(b["slot"] == slot for b in bookings):
+        await message.answer(
+            "Ой, это время только что заняли 😔 Откройте приложение и выберите другое окошко.",
+            reply_markup=app_keyboard(),
+        )
+        return
+
+    u = message.from_user
+    who = f"@{u.username}" if u.username else u.full_name
     items = "\n".join(f"• {i}" for i in data.get("items", []))
     total = data.get("total")
     total_text = f"{total:,} ₽".replace(",", " ") if total else "уточнит мастер"
+    when = data.get("when", slot)
     comment = data.get("comment") or "—"
 
+    bookings.append({"slot": slot, "when": when, "user_id": u.id, "who": who, "items": data.get("items", [])})
+    save_bookings(bookings)
+
     await message.answer(
-        f"Спасибо! Заявка отправлена мастеру 🤍\n\n{items}\n\nИтого: {total_text}\n\n"
-        "Скоро с вами свяжутся, чтобы подтвердить дату и время.",
+        f"Готово! Вы записаны 🤍\n\n🗓 {when}\n{items}\n\nИтого: {total_text}\n\n"
+        "Мастер напишет вам, чтобы подтвердить запись.",
         reply_markup=app_keyboard(),
     )
 
     if ADMIN_ID:
-        u = message.from_user
-        who = f"@{u.username}" if u.username else u.full_name
         mood = MOODS.get(data.get("mood"), "")
         await bot.send_message(
             ADMIN_ID,
             "🆕 Новая запись\n\n"
+            f"🗓 {when}\n"
             f"Клиент: {who} (id {u.id})\n"
             f"{items}\n"
             + (f"Атмосфера: {mood}\n" if mood else "")
@@ -106,10 +151,37 @@ async def on_order(message: Message):
         )
 
 
+# ---------- мастер ----------
+@dp.message(Command("bookings"))
+async def list_bookings(message: Message):
+    if not is_admin(message):
+        return
+    items = upcoming()
+    if not items:
+        await message.answer("Ближайших записей нет.")
+        return
+    text = "\n\n".join(f"🗓 {b['when']}\n{b['who']}\n" + "\n".join(b["items"]) for b in items)
+    await message.answer("Ближайшие записи:\n\n" + text)
+
+
+@dp.message(Command("free"))
+async def free_slot(message: Message):
+    if not is_admin(message):
+        return
+    parts = (message.text or "").split()[1:]
+    slot = "T".join(parts) if len(parts) == 2 else (parts[0] if parts else "")
+    bookings = load_bookings()
+    left = [b for b in bookings if b["slot"] != slot]
+    if len(left) == len(bookings):
+        await message.answer("Не нашёл такую запись. Пример: /free 2026-11-24 12:00")
+        return
+    save_bookings(left)
+    await message.answer(f"Окошко {slot.replace('T', ' ')} снова свободно ✅", reply_markup=app_keyboard())
+
+
 async def main():
-    # Дополнительно — кнопка «Записаться» рядом с полем ввода (меню бота)
-    await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text="Записаться", web_app=WebAppInfo(url=WEBAPP_URL)))
-    print("Бот запущен! Не закрывайте это окно. Остановить: Ctrl+C")
+    await bot.set_chat_menu_button(menu_button=MenuButtonDefault())
+    print("Бот WWP запущен! Не закрывайте это окно. Остановить: Ctrl+C")
     await dp.start_polling(bot)
 
 
