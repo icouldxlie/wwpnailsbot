@@ -409,7 +409,7 @@ function furBall(id,size,colors,seed){
    ЛОГИКА
    ========================================================= */
 const tg = window.Telegram && window.Telegram.WebApp;
-const inTg = !!(tg && tg.initData);
+const inTg = !!(tg && tg.platform && tg.platform !== 'unknown');   // при запуске с кнопки клавиатуры initData пустой
 const fmt = n => n.toLocaleString('ru-RU').replace(/[\u00a0,]/g,' ') + ' ₽';
 const BUSY = new Set((new URLSearchParams(location.search).get('busy') || '').split(',').filter(Boolean));
 // Живой список занятых окошек: бот обновляет busy.json на GitHub после каждой записи
