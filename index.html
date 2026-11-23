@@ -136,6 +136,28 @@
     background:linear-gradient(135deg,#ffc3d2,var(--pink2));box-shadow:0 14px 34px -10px rgba(217,116,143,.6)}
   .cta[disabled]{opacity:.4}
   .card,.box,.plate,.day,.slot,.size,.back,.tile{-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .gift{display:flex;gap:12px;align-items:center;margin-top:12px;padding:14px 16px;border-radius:22px;
+    background:linear-gradient(135deg,rgba(170,120,210,.22),rgba(242,163,184,.16));border:1px solid rgba(242,163,184,.25)}
+  .gift .ic{font-size:22px}
+  .gift p{font-size:13px;line-height:1.45;color:var(--text)}
+  .gift p b{color:var(--pink)}
+  .topic{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+    border-radius:20px;padding:10px 14px 10px 10px;cursor:pointer;transition:.2s}
+  .topic + .topic{margin-top:10px}
+  .topic .tp{width:54px;height:54px;border-radius:15px;background:#2a1f24 center/cover;flex:none}
+  .topic canvas{width:54px;height:54px;flex:none}
+  .topic div{flex:1}
+  .topic h4{font-family:'Unbounded',sans-serif;font-size:14px;font-weight:700}
+  .topic small{display:block;font-size:12px;color:var(--muted);margin-top:3px}
+  .topic .rd{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);flex:none;transition:.2s}
+  .topic.on{border-color:var(--pink)}
+  .topic.on .rd{border:7px solid var(--pink)}
+  .free{display:inline-block;font-family:'Space Mono',monospace;font-size:10.5px;color:var(--bg);background:var(--pink);border-radius:8px;padding:2px 6px;margin-left:6px;vertical-align:2px}
+  .fields{margin-top:14px;display:none}
+  .fields.show{display:block}
+  .fields label{display:block;font-size:12px;color:var(--muted);margin:10px 2px 6px;font-family:'Space Mono',monospace}
+  .fields input{width:100%;border:1px solid var(--line);border-radius:16px;padding:13px 14px;font:15px 'Manrope';color:var(--text);background:var(--card2);outline:none;color-scheme:dark}
+  .fields input:focus,textarea:focus{border-color:var(--pink)}
   .hidden{display:none!important}
   .done{text-align:center;padding-top:30px}
   .done canvas{width:200px;height:200px;margin:0 auto;display:block}
@@ -171,9 +193,6 @@
       </div>
     </button>
 
-    <div class="section">Таро и разборы</div>
-    <div class="grid" id="esoGrid"></div>
-
     <div class="foot">WWP · с любовью и мягкостью</div>
   </section>
 
@@ -189,6 +208,7 @@
       <div class="txt">Хочу дизайн или френч<small>добавляется к стоимости · +222 ₽</small></div>
       <div class="switch" id="designSwitch"></div>
     </div>
+    <div class="gift"><span class="ic">🔮</span><p><b>В подарок к процедуре:</b> расклад Таро или разбор матрицы судьбы, натальной карты, чакр — выберете на следующем шаге</p></div>
   </section>
 
   <!-- ===== НАРАЩИВАНИЕ ===== -->
@@ -201,6 +221,7 @@
       <div class="size" data-size="L" onclick="pickSize('L')"><b>L</b><span>2 999 ₽</span></div>
       <div class="size" data-size="XL" onclick="pickSize('XL')"><b>XL</b><span>3 333 ₽</span></div>
     </div>
+    <div class="gift"><span class="ic">🔮</span><p><b>В подарок к процедуре:</b> расклад Таро или разбор матрицы судьбы, натальной карты, чакр — выберете на следующем шаге</p></div>
   </section>
 
   <!-- ===== ВОПРОС ===== -->
@@ -213,8 +234,30 @@
     </button>
     <button class="plate" onclick="pickMood('talk')">
       <canvas id="pomTalk"></canvas>
-      <div><h3>Хочу поговорить с мастером</h3><p>Лёгкая беседа и хорошее настроение — время пролетит</p></div>
+      <div><h3>Хочу поговорить с мастером</h3><p>Беседа, а можно и расклад Таро или разбор — в подарок 🔮</p></div>
     </button>
+  </section>
+
+  <!-- ===== О ЧЁМ ПОГОВОРИМ ===== -->
+  <section class="screen" id="topic">
+    <div class="top"><button class="back" onclick="goBack()">←</button><span class="crumb">атмосфера / беседа</span></div>
+    <h2 class="title">О чём поговорим?</h2>
+    <p class="sub">Пока мастер делает ногти — любой разбор входит в стоимость процедуры 🤍</p>
+    <div id="topics"></div>
+    <div class="fields" id="fieldsTarot">
+      <label>ваш вопрос к картам (необязательно)</label>
+      <input id="fQuestion" type="text" maxlength="200" placeholder="Например: что ждёт в отношениях?">
+    </div>
+    <div class="fields" id="fieldsBirth">
+      <label>дата рождения</label>
+      <input id="fBirth" type="date" oninput="updateCta()">
+      <div id="fieldsNatal">
+        <label>время рождения (если знаете)</label>
+        <input id="fBirthTime" type="time">
+        <label>город рождения</label>
+        <input id="fBirthCity" type="text" maxlength="80" placeholder="Например: Ташкент">
+      </div>
+    </div>
   </section>
 
   <!-- ===== ДАТА И ВРЕМЯ ===== -->
@@ -257,9 +300,23 @@
    ========================================================= */
 const MASTER_NAME = "Вера";
 const PRICES = { mono:2222, design:222, L:2999, XL:3333 };
-const TIMES = ["10:00","12:00","14:00","16:00","18:00"];   // окошки для записи
-const DAYS_AHEAD = 14;                                       // на сколько дней вперёд можно записаться
-const DAYS_OFF = [];                                         // выходные: 0 = вс, 1 = пн … 6 = сб, например [0]
+const HOURS = ["10:00","20:00"];      // обычный рабочий день
+const PROCEDURE_HOURS = 2;             // сколько длится маникюр (часов)
+const DAYS_AHEAD = 45;                 // на сколько дней вперёд показывать запись
+const DAYS_OFF = [];                   // постоянные выходные: 0 = вс, 1 = пн … 6 = сб
+// График по датам. Если на месяц задан график — в этом месяце работаем ТОЛЬКО в эти дни.
+const SCHEDULE = {
+  "2026-12-02": ["12:00","20:00"],
+  "2026-12-05": ["10:00","20:00"],
+  "2026-12-06": ["10:00","20:00"],
+  "2026-12-08": ["12:00","20:00"],
+  "2026-12-11": ["12:00","20:00"],
+  "2026-12-12": ["10:00","18:00"],
+  "2026-12-16": ["12:00","20:00"],
+  "2026-12-17": ["12:00","20:00"],
+  "2026-12-20": ["10:00","18:00"],
+  "2026-12-23": ["16:00","21:00"],
+};
 const IMG = id => "https://images.unsplash.com/" + id + "?auto=format&fit=crop&w=800&q=70";
 const PHOTOS = {   // бесплатные фото с Unsplash (unsplash.com/license)
   mono:   IMG("photo-1610992015762-45dca7fa3a85"),
@@ -270,11 +327,12 @@ const PHOTOS = {   // бесплатные фото с Unsplash (unsplash.com/li
   natal:  IMG("photo-1729335511883-29eade10006b"),
   chakras:IMG("photo-1521133573892-e44906baee46"),
 };
-const ESOTERIC = [   // price: null → «цена по запросу»; или число, например 1500
-  { id:"tarot",   title:"Таро",            desc:"Расклад на ваш вопрос",   price:null },
-  { id:"matrix",  title:"Матрица судьбы",  desc:"Разбор по дате рождения", price:null },
-  { id:"natal",   title:"Натальная карта", desc:"Астрологический разбор",  price:null },
-  { id:"chakras", title:"Разбор чакр",     desc:"Энергетический баланс",   price:null },
+const TOPICS = [   // темы для беседы — входят в стоимость процедуры
+  { id:"chat",    title:"Просто поболтать", desc:"Лёгкая беседа обо всём" },
+  { id:"tarot",   title:"Расклад Таро",     desc:"Ответ карт на ваш вопрос" },
+  { id:"matrix",  title:"Матрица судьбы",   desc:"Разбор по дате рождения" },
+  { id:"natal",   title:"Натальная карта",  desc:"Разбор по дате, времени и месту рождения" },
+  { id:"chakras", title:"Разбор чакр",      desc:"Энергетический баланс" },
 ];
 
 /* =========================================================
@@ -349,9 +407,9 @@ function furBall(id,size,colors,seed){
    ========================================================= */
 const tg = window.Telegram && window.Telegram.WebApp;
 const inTg = !!(tg && tg.initData);
-const fmt = n => n.toLocaleString('ru-RU').replace(/[ ,]/g,' ') + ' ₽';
+const fmt = n => n.toLocaleString('ru-RU').replace(/[\u00a0,]/g,' ') + ' ₽';
 const BUSY = new Set((new URLSearchParams(location.search).get('busy') || '').split(',').filter(Boolean));
-const state = { kind:null, type:null, design:false, size:null, mood:null, eso:null, date:null, time:null, screen:'home', history:[] };
+const state = { type:null, design:false, size:null, mood:null, topic:null, date:null, time:null, screen:'home', history:[] };
 const WD = ['вс','пн','вт','ср','чт','пт','сб'];
 const MON = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MON_S = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
@@ -360,9 +418,10 @@ const iso = d => d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDa
 
 document.getElementById('masterName').textContent = MASTER_NAME;
 document.querySelectorAll('[data-photo]').forEach(el => { el.style.backgroundImage = 'url("' + PHOTOS[el.dataset.photo] + '")'; });
-document.getElementById('esoGrid').innerHTML = ESOTERIC.map(s =>
-  '<button class="tile" style="background-image:url(\'' + PHOTOS[s.id] + '\')" onclick="pickEso(\'' + s.id + '\')">' +
-  '<div><h4>' + s.title + '</h4><span>' + (s.price ? fmt(s.price) : 'цена по запросу') + '</span></div></button>'
+document.getElementById('topics').innerHTML = TOPICS.map(t =>
+  '<button class="topic" data-t="' + t.id + '" onclick="pickTopic(\'' + t.id + '\')">' +
+  (t.id === 'chat' ? '<canvas id="pomChat"></canvas>' : '<span class="tp" style="background-image:url(\'' + PHOTOS[t.id] + '\')"></span>') +
+  '<div><h4>' + t.title + (t.id === 'chat' ? '' : '<span class="free">в подарок</span>') + '</h4><small>' + t.desc + '</small></div><span class="rd"></span></button>'
 ).join('');
 
 if (tg) {
@@ -380,6 +439,7 @@ function go(id, noHistory){
   state.screen = id;
   if (inTg) (id === 'home' || id === 'done') ? tg.BackButton.hide() : tg.BackButton.show();
   if (id === 'mood') { furBall('pomSilence',84,MILK,11); furBall('pomTalk',84,PINK,12); }
+  if (id === 'topic') furBall('pomChat',54,PINK,14);
   if (id === 'done') furBall('pomDone',200,PINK,21);
   updateCta();
 }
@@ -387,7 +447,7 @@ function goBack(){ haptic(); go(state.history.pop() || 'home', true); }
 
 function openNails(type){
   haptic();
-  Object.assign(state, { kind:'nails', type:type, design:false, size:null, mood:null, eso:null, date:null, time:null, history:[] });
+  Object.assign(state, { type:type, design:false, size:null, mood:null, topic:null, date:null, time:null, history:[] });
   document.getElementById('designSwitch').classList.remove('on');
   document.querySelectorAll('.size').forEach(s => s.classList.remove('on'));
   state.screen = 'home'; go(type);
@@ -402,28 +462,61 @@ function pickSize(sz){
   document.querySelectorAll('.size').forEach(s => s.classList.toggle('on', s.dataset.size === sz));
   updateCta();
 }
-function pickMood(m){ haptic(); state.mood = m; openWhen(); }
-function pickEso(id){
-  haptic();
-  Object.assign(state, { kind:'eso', eso:id, type:null, mood:null, date:null, time:null, history:[] });
-  state.screen = 'home'; openWhen();
+function pickMood(m){
+  haptic(); state.mood = m;
+  if (m === 'talk') { pickTopic(state.topic || 'chat', true); go('topic'); }
+  else { state.topic = null; openWhen(); }
+}
+function pickTopic(id, silent){
+  if (!silent) haptic();
+  state.topic = id;
+  document.querySelectorAll('.topic').forEach(el => el.classList.toggle('on', el.dataset.t === id));
+  document.getElementById('fieldsTarot').classList.toggle('show', id === 'tarot');
+  document.getElementById('fieldsBirth').classList.toggle('show', id === 'matrix' || id === 'natal');
+  document.getElementById('fieldsNatal').style.display = id === 'natal' ? 'block' : 'none';
+  updateCta();
+}
+function topicDetails(){
+  const t = state.topic, v = id => document.getElementById(id).value.trim();
+  if (t === 'tarot') return v('fQuestion') ? 'вопрос: ' + v('fQuestion') : '';
+  if (t === 'matrix' || t === 'natal'){
+    let d = v('fBirth') ? 'д.р. ' + v('fBirth').split('-').reverse().join('.') : '';
+    if (t === 'natal'){ if (v('fBirthTime')) d += ', ' + v('fBirthTime'); if (v('fBirthCity')) d += ', ' + v('fBirthCity'); }
+    return d;
+  }
+  return '';
 }
 
 /* ---- дата и время ---- */
-function freeTimes(dateStr){
-  const now = new Date();
-  return TIMES.map(t => {
-    const dt = new Date(dateStr + 'T' + t + ':00');
-    return { t:t, busy: BUSY.has(dateStr + 'T' + t) || dt.getTime() < now.getTime() + 60*60*1000 };
-  });
+const SCHEDULED_MONTHS = new Set(Object.keys(SCHEDULE).map(k => k.slice(0,7)));
+function hoursFor(ds){
+  if (SCHEDULE[ds]) return SCHEDULE[ds];
+  if (SCHEDULED_MONTHS.has(ds.slice(0,7))) return null;            // в месяце с графиком — только по графику
+  if (DAYS_OFF.indexOf(new Date(ds + 'T12:00:00').getDay()) >= 0) return null;
+  return HOURS;
+}
+function freeTimes(ds){
+  const h = hoursFor(ds); if (!h) return null;
+  const toMin = t => +t.slice(0,2) * 60 + +t.slice(3,5);
+  const now = Date.now(), out = [];
+  for (let m = toMin(h[0]); m + PROCEDURE_HOURS*60 <= toMin(h[1]); m += PROCEDURE_HOURS*60){
+    const t = pad(Math.floor(m/60)) + ':' + pad(m%60);
+    const dt = new Date(ds + 'T' + t + ':00').getTime();
+    out.push({ t:t, busy: BUSY.has(ds + 'T' + t) || dt < now + 60*60*1000 });
+  }
+  return out;
 }
 function openWhen(){
   const box = document.getElementById('days'); let html = ''; let first = null;
   const d0 = new Date(); d0.setHours(0,0,0,0);
+  const lastMonth = [...SCHEDULED_MONTHS].sort().pop();               // запись открыта до конца последнего месяца с графиком
   for (let i = 0; i < DAYS_AHEAD; i++){
     const d = new Date(d0); d.setDate(d0.getDate() + i);
     const ds = iso(d);
-    const off = DAYS_OFF.indexOf(d.getDay()) >= 0 || freeTimes(ds).every(x => x.busy);
+    if (lastMonth && ds.slice(0,7) > lastMonth) break;
+    const ft = freeTimes(ds);
+    if (!ft || !ft.length) continue;                                  // выходной — не показываем
+    const off = ft.every(x => x.busy);
     if (!off && !first) first = ds;
     html += '<div class="day' + (off ? ' off' : '') + '" data-d="' + ds + '" onclick="pickDay(\'' + ds + '\')">' +
             '<small>' + (i === 0 ? 'сегодня' : WD[d.getDay()]) + '</small><b>' + d.getDate() + '</b><i>' + MON_S[d.getMonth()] + '</i></div>';
@@ -440,7 +533,7 @@ function pickDay(ds, silent){
   const t = document.getElementById('times');
   if (!ds){ t.innerHTML = '<div class="empty">Свободных окошек пока нет — напишите мастеру</div>'; updateCta(); return; }
   const d = new Date(ds + 'T12:00:00');
-  document.getElementById('dayHint').textContent = 'свободное время · ' + WD[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()];
+  document.getElementById('dayHint').textContent = WD[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()] + ' · процедура ~' + PROCEDURE_HOURS + ' ч';
   t.innerHTML = freeTimes(ds).map(x =>
     '<div class="slot' + (x.busy ? ' busy' : '') + (state.time === x.t ? ' on' : '') + '" onclick="pickTime(\'' + x.t + '\')">' + x.t + '</div>').join('');
   updateCta();
@@ -457,22 +550,24 @@ function whenLabel(){
 
 /* ---- итог ---- */
 function calc(){
-  const lines = []; let total = 0; let priceKnown = true;
-  if (state.kind === 'nails'){
-    if (state.type === 'mono'){
-      lines.push(['Однотонные ногти', fmt(PRICES.mono)]); total += PRICES.mono;
-      if (state.design){ lines.push(['Дизайн / френч', '+' + fmt(PRICES.design)]); total += PRICES.design; }
-    } else {
-      lines.push(['Наращивание, размер ' + state.size, fmt(PRICES[state.size])]); total += PRICES[state.size];
-    }
-    lines.push(['Атмосфера', state.mood === 'silence' ? 'в тишине' : 'поговорить с мастером']);
+  const lines = []; let total = 0;
+  if (state.type === 'mono'){
+    lines.push(['Однотонные ногти', fmt(PRICES.mono)]); total += PRICES.mono;
+    if (state.design){ lines.push(['Дизайн / френч', '+' + fmt(PRICES.design)]); total += PRICES.design; }
   } else {
-    const s = ESOTERIC.find(x => x.id === state.eso);
-    lines.push([s.title, s.price ? fmt(s.price) : 'по запросу']);
-    if (s.price) total += s.price; else priceKnown = false;
+    lines.push(['Наращивание, размер ' + state.size, fmt(PRICES[state.size])]); total += PRICES[state.size];
+  }
+  if (state.mood === 'silence') lines.push(['Атмосфера', 'в тишине']);
+  else {
+    const tp = TOPICS.find(x => x.id === state.topic) || TOPICS[0];
+    lines.push(['Атмосфера', 'поговорить с мастером']);
+    if (tp.id !== 'chat'){
+      const det = topicDetails();
+      lines.push([tp.title, 'в подарок 🔮' + (det ? '<br><small style="color:var(--muted)">' + det.replace(/</g,'') + '</small>' : '')]);
+    }
   }
   lines.push(['Дата и время', whenLabel()]);
-  return { lines: lines, total: total, priceKnown: priceKnown };
+  return { lines: lines, total: total, priceKnown: true };
 }
 function renderSummary(){
   const c = calc();
@@ -485,6 +580,11 @@ function ctaConfig(){
   const s = state.screen;
   if (s === 'mono') return { text:'Далее · ' + fmt(PRICES.mono + (state.design ? PRICES.design : 0)), on:true };
   if (s === 'ext')  return { text: state.size ? 'Далее · ' + fmt(PRICES[state.size]) : 'Выберите размер', on:!!state.size };
+  if (s === 'topic'){
+    const needBirth = state.topic === 'matrix' || state.topic === 'natal';
+    const ok = !needBirth || !!document.getElementById('fBirth').value;
+    return { text: ok ? 'Далее' : 'Укажите дату рождения', on: ok };
+  }
   if (s === 'when') return { text: state.time ? 'Далее · ' + state.time : 'Выберите время', on:!!state.time };
   if (s === 'summary') return { text:'Записаться', on:true };
   return null;
@@ -505,15 +605,17 @@ function onCta(){
   if (!cfg || !cfg.on) return;
   haptic();
   if (s === 'mono' || s === 'ext') return go('mood');
+  if (s === 'topic') return openWhen();
   if (s === 'when'){ renderSummary(); return go('summary'); }
   if (s === 'summary') submit();
 }
 function submit(){
   const c = calc();
+  const tp = TOPICS.find(x => x.id === state.topic);
   const payload = {
-    kind: state.kind,
-    items: c.lines.filter(l => l[0] !== 'Дата и время').map(l => l[0] + ': ' + l[1]),
-    total: c.priceKnown ? c.total : null,
+    items: c.lines.filter(l => l[0] !== 'Дата и время').map(l => l[0] + ': ' + l[1].replace(/<br>/g, ' — ').replace(/<[^>]+>/g, '')),
+    total: c.total,
+    topic: tp && tp.id !== 'chat' ? tp.title + (topicDetails() ? ' (' + topicDetails() + ')' : '') : null,
     mood: state.mood,
     slot: state.date + 'T' + state.time,
     when: whenLabel(),
