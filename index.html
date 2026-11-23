@@ -116,8 +116,10 @@
   .day.on small,.day.on i{color:var(--deep)}
   .day.off{opacity:.3;pointer-events:none}
   .times{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .slot{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:14px 0;text-align:center;font-family:'Unbounded',sans-serif;font-size:15px;cursor:pointer;transition:.2s}
+  .slot{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:11px 0;text-align:center;font-family:'Unbounded',sans-serif;font-size:15px;cursor:pointer;transition:.2s}
+  .slot small{display:block;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);margin-top:3px}
   .slot.on{background:var(--pink);color:var(--bg);border-color:var(--pink)}
+  .slot.on small{color:var(--deep)}
   .slot.busy{opacity:.3;text-decoration:line-through;pointer-events:none}
   .hint{font-family:'Space Mono',monospace;font-size:12px;color:var(--muted);margin:16px 2px 10px}
   .empty{grid-column:1/-1;text-align:center;color:var(--muted);font-size:14px;padding:18px 0}
@@ -304,6 +306,7 @@ const HOURS = ["10:00","20:00"];      // обычный рабочий день
 const PROCEDURE_HOURS = 2;             // сколько длится маникюр (часов)
 const DAYS_AHEAD = 45;                 // на сколько дней вперёд показывать запись
 const DAYS_OFF = [];                   // постоянные выходные: 0 = вс, 1 = пн … 6 = сб
+const ONLY_SCHEDULE = true;            // true — записываем только в дни из графика ниже
 // График по датам. Если на месяц задан график — в этом месяце работаем ТОЛЬКО в эти дни.
 const SCHEDULE = {
   "2026-12-02": ["12:00","20:00"],
@@ -491,6 +494,7 @@ function topicDetails(){
 const SCHEDULED_MONTHS = new Set(Object.keys(SCHEDULE).map(k => k.slice(0,7)));
 function hoursFor(ds){
   if (SCHEDULE[ds]) return SCHEDULE[ds];
+  if (ONLY_SCHEDULE) return null;                                    // запись только по графику
   if (SCHEDULED_MONTHS.has(ds.slice(0,7))) return null;            // в месяце с графиком — только по графику
   if (DAYS_OFF.indexOf(new Date(ds + 'T12:00:00').getDay()) >= 0) return null;
   return HOURS;
@@ -500,9 +504,9 @@ function freeTimes(ds){
   const toMin = t => +t.slice(0,2) * 60 + +t.slice(3,5);
   const now = Date.now(), out = [];
   for (let m = toMin(h[0]); m + PROCEDURE_HOURS*60 <= toMin(h[1]); m += PROCEDURE_HOURS*60){
-    const t = pad(Math.floor(m/60)) + ':' + pad(m%60);
+    const t = pad(Math.floor(m/60)) + ':' + pad(m%60), e = m + PROCEDURE_HOURS*60;
     const dt = new Date(ds + 'T' + t + ':00').getTime();
-    out.push({ t:t, busy: BUSY.has(ds + 'T' + t) || dt < now + 60*60*1000 });
+    out.push({ t:t, end: pad(Math.floor(e/60)) + ':' + pad(e%60), busy: BUSY.has(ds + 'T' + t) || dt < now + 60*60*1000 });
   }
   return out;
 }
@@ -535,17 +539,18 @@ function pickDay(ds, silent){
   const d = new Date(ds + 'T12:00:00');
   document.getElementById('dayHint').textContent = WD[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()] + ' · процедура ~' + PROCEDURE_HOURS + ' ч';
   t.innerHTML = freeTimes(ds).map(x =>
-    '<div class="slot' + (x.busy ? ' busy' : '') + (state.time === x.t ? ' on' : '') + '" onclick="pickTime(\'' + x.t + '\')">' + x.t + '</div>').join('');
+    '<div class="slot' + (x.busy ? ' busy' : '') + (state.time === x.t ? ' on' : '') + '" data-t="' + x.t + '" onclick="pickTime(\'' + x.t + '\')">' + x.t + '<small>до ' + x.end + '</small></div>').join('');
   updateCta();
 }
 function pickTime(t){
   haptic(); state.time = t;
-  document.querySelectorAll('.slot').forEach(el => el.classList.toggle('on', el.textContent === t));
+  document.querySelectorAll('.slot').forEach(el => el.classList.toggle('on', el.dataset.t === t));
   updateCta();
 }
 function whenLabel(){
   const d = new Date(state.date + 'T12:00:00');
-  return WD[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()] + ' · ' + state.time;
+  const x = (freeTimes(state.date) || []).find(z => z.t === state.time);
+  return WD[d.getDay()] + ', ' + d.getDate() + ' ' + MON[d.getMonth()] + ' · ' + state.time + (x ? '–' + x.end : '');
 }
 
 /* ---- итог ---- */
