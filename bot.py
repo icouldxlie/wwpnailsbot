@@ -35,7 +35,7 @@ if not BOT_TOKEN:
     BOT_TOKEN = input("Вставьте токен бота от @BotFather и нажмите Enter: ").strip()
     save_env("BOT_TOKEN", BOT_TOKEN)
 
-WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://icouldxlie.github.io/vera-nails/")
+WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://icouldxlie.github.io/wwpnailsbot/")
 # Telegram ID мастера — сюда придут заявки. Если не задан, мастером станет первый, кто нажмёт /start.
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 0) or 0)
 MASTER_NAME = os.environ.get("MASTER_NAME", "Вера")
