@@ -2,10 +2,12 @@
 WWP nail studio — два Telegram-бота в одной программе.
 
 @wwpnailsbot        — для клиентов: /start → «💅 Открыть приложение» → запись.
-@wwpnails_admin_bot — для мастера: сюда приходят уведомления о записях.
-                      Мастером становится тот, кто первым нажмёт в нём /start.
-  /bookings                 — ближайшие записи
-  /free 2026-12-02 12:00    — освободить окошко (если клиент отменил)
+@wwpnails_admin_bot — для команды: сюда приходят уведомления о записях.
+                      Две роли: 💅 мастер и 🛡 админ. Первый, кто нажмёт /start, — админ;
+                      остальные выбирают роль, админ одобряет.
+  /bookings                 — ближайшие записи (мастер и админ)
+  /free 2026-12-02 12:00    — освободить окошко (мастер и админ)
+  /team                     — команда: сменить роль, убрать (только админ)
 
 Занятые окошки бот публикует в файл busy.json на GitHub — приложение читает его
 при каждом открытии, поэтому все клиенты сразу видят, какое время уже занято.
@@ -58,13 +60,28 @@ def ask(key: str, prompt: str) -> str:
 BOT_TOKEN = ask("BOT_TOKEN", "1/3 Вставьте токен бота @wwpnailsbot и нажмите Enter: ")
 ADMIN_BOT_TOKEN = ask("ADMIN_BOT_TOKEN", "2/3 Вставьте токен бота уведомлений @wwpnails_admin_bot и нажмите Enter: ")
 GITHUB_TOKEN = ask("GITHUB_TOKEN", "3/3 Вставьте ключ GitHub (github_pat_...) и нажмите Enter: ")
-# Мастера (может быть несколько) — им приходят уведомления о записях
-ADMIN_IDS = {int(x) for x in (os.environ.get("ADMIN_IDS", "") + "," + os.environ.get("ADMIN_ID", "")).split(",") if x.strip().isdigit()}
+TEAM_PATH = os.path.join(HERE, "team.json")
+ROLES = {"admin": "🛡 Админ", "master": "💅 Мастер"}
 
 
-def save_admins():
-    save_env("ADMIN_ID", "")  # старый формат (один мастер) больше не нужен
-    save_env("ADMIN_IDS", ",".join(str(i) for i in sorted(ADMIN_IDS)))
+def load_team() -> dict:
+    """Команда студии: {telegram_id: "admin" | "master"}."""
+    try:
+        with open(TEAM_PATH, encoding="utf-8") as f:
+            return {int(k): v for k, v in json.load(f).items()}
+    except (FileNotFoundError, json.JSONDecodeError):
+        # переход со старой версии: все, кто раньше получал записи, становятся админами
+        old = (os.environ.get("ADMIN_IDS", "") + "," + os.environ.get("ADMIN_ID", "")).split(",")
+        return {int(x): "admin" for x in old if x.strip().isdigit()}
+
+
+def save_team():
+    with open(TEAM_PATH, "w", encoding="utf-8") as f:
+        json.dump({str(k): v for k, v in TEAM.items()}, f, ensure_ascii=False, indent=1)
+
+
+TEAM = load_team()
+save_team()
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(BOT_TOKEN)              # клиентский бот
@@ -127,14 +144,16 @@ def app_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
-async def notify_master(text: str, **kwargs):
-    if not ADMIN_IDS:
-        logging.warning("Мастер ещё не нажал /start в боте уведомлений — уведомление не отправлено.")
-    for admin_id in list(ADMIN_IDS):
+async def notify_master(text: str, roles=("admin", "master"), **kwargs):
+    """Отправляет сообщение команде (по умолчанию — и мастерам, и админам)."""
+    targets = [uid for uid, r in TEAM.items() if r in roles]
+    if not targets:
+        logging.warning("В боте уведомлений ещё никого нет — нажмите там /start.")
+    for uid in targets:
         try:
-            await admin_bot.send_message(admin_id, text, parse_mode="HTML", **kwargs)
+            await admin_bot.send_message(uid, text, parse_mode="HTML", **kwargs)
         except Exception as e:  # noqa: BLE001
-            logging.warning("Не удалось отправить уведомление мастеру %s: %s", admin_id, e)
+            logging.warning("Не удалось отправить сообщение %s: %s", uid, e)
 
 
 # ---------- клиентский бот ----------
@@ -204,50 +223,82 @@ async def on_order(message: Message):
     await publish_busy()
 
 
-# ---------- бот уведомлений (для мастера) ----------
-def is_admin(message) -> bool:
-    return message.from_user.id in ADMIN_IDS
+# ---------- бот уведомлений (для команды) ----------
+def role_of(obj):
+    return TEAM.get(obj.from_user.id)
 
 
-ADMIN_HELP = (
-    "👑 Вы мастер WWP. Сюда будут приходить все новые записи.\n\n"
-    "/bookings — ближайшие записи\n"
-    "/free 2026-12-02 12:00 — освободить окошко\n"
-    "/masters — кто получает записи"
-)
+def is_admin(obj) -> bool:
+    return role_of(obj) == "admin"
+
+
+def is_team(obj) -> bool:
+    return role_of(obj) in ROLES
+
+
+def help_text(role: str) -> str:
+    text = (f"Ваша роль: {ROLES[role]}\n\nСюда приходят все новые записи 🤍\n\n"
+            "/bookings — ближайшие записи\n"
+            "/free 2026-12-02 12:00 — освободить окошко")
+    if role == "admin":
+        text += "\n/team — команда: роли и доступ"
+    return text
+
+
+async def user_name(uid: int) -> str:
+    try:
+        ch = await admin_bot.get_chat(uid)
+        return f"@{ch.username}" if ch.username else (ch.full_name or str(uid))
+    except Exception:  # noqa: BLE001
+        return str(uid)
 
 
 @admin_dp.message(CommandStart())
 async def admin_start(message: Message):
     u = message.from_user
-    if not ADMIN_IDS:
-        ADMIN_IDS.add(u.id)
-        save_admins()
-    if is_admin(message):
-        await message.answer(ADMIN_HELP)
+    if not TEAM:  # самый первый человек становится админом
+        TEAM[u.id] = "admin"
+        save_team()
+    if is_team(message):
+        await message.answer(help_text(role_of(message)))
         return
-    who = f"@{u.username}" if u.username else u.full_name
-    await message.answer("Запрос отправлен мастеру студии 🤍 Как только его одобрят, сюда начнут приходить записи.")
     kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Разрешить", callback_data=f"add:{u.id}"),
-        InlineKeyboardButton(text="✖️ Нет", callback_data=f"deny:{u.id}"),
+        InlineKeyboardButton(text="💅 Я мастер", callback_data="want:master"),
+        InlineKeyboardButton(text="🛡 Я админ", callback_data="want:admin"),
     ]])
-    await notify_master(f"🔑 {html.escape(who)} ({html.escape(u.full_name)}) хочет получать записи студии.", reply_markup=kb)
+    await message.answer("Это бот команды студии WWP 🤍\nКто вы?", reply_markup=kb)
 
 
-@admin_dp.callback_query(F.data.startswith("add:") | F.data.startswith("deny:"))
+@admin_dp.callback_query(F.data.startswith("want:"))
+async def on_want(call: CallbackQuery):
+    role = call.data.split(":")[1]
+    u = call.from_user
+    who = f"@{u.username}" if u.username else u.full_name
+    await call.message.edit_text(f"Вы выбрали: {ROLES[role]}\nЗапрос отправлен админу студии — как только его одобрят, сюда начнут приходить записи.")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Разрешить", callback_data=f"ok:{u.id}:{role}"),
+        InlineKeyboardButton(text="✖️ Нет", callback_data=f"no:{u.id}"),
+    ]])
+    await notify_master(
+        f"🔑 {html.escape(who)} ({html.escape(u.full_name)}) хочет в команду как <b>{ROLES[role]}</b>.",
+        roles=("admin",), reply_markup=kb,
+    )
+    await call.answer()
+
+
+@admin_dp.callback_query(F.data.startswith("ok:") | F.data.startswith("no:"))
 async def on_access(call: CallbackQuery):
     if not is_admin(call):
-        await call.answer("Только мастер может это сделать", show_alert=True)
+        await call.answer("Это может сделать только админ", show_alert=True)
         return
-    action, uid = call.data.split(":")
-    uid = int(uid)
-    if action == "add":
-        ADMIN_IDS.add(uid)
-        save_admins()
-        await call.message.edit_text(call.message.text + "\n\n✅ Доступ выдан")
+    parts = call.data.split(":")
+    uid = int(parts[1])
+    if parts[0] == "ok":
+        TEAM[uid] = parts[2]
+        save_team()
+        await call.message.edit_text(call.message.text + f"\n\n✅ Добавлен как {ROLES[parts[2]]}")
         try:
-            await admin_bot.send_message(uid, ADMIN_HELP)
+            await admin_bot.send_message(uid, "Доступ одобрен ✅\n\n" + help_text(parts[2]))
         except Exception:  # noqa: BLE001
             pass
     else:
@@ -255,40 +306,51 @@ async def on_access(call: CallbackQuery):
     await call.answer()
 
 
-@admin_dp.message(Command("masters"))
-async def list_masters(message: Message):
-    if not is_admin(message):
-        return
-    lines = []
-    for uid in sorted(ADMIN_IDS):
-        try:
-            ch = await admin_bot.get_chat(uid)
-            name = f"@{ch.username}" if ch.username else (ch.full_name or str(uid))
-        except Exception:  # noqa: BLE001
-            name = str(uid)
-        lines.append(f"• {name} — /remove {uid}")
-    await message.answer("Записи получают:\n" + "\n".join(lines) + "\n\nЧтобы убрать человека, отправьте команду /remove с его номером.")
+async def team_view():
+    rows, lines = [], []
+    for uid, role in sorted(TEAM.items(), key=lambda x: x[1]):
+        name = await user_name(uid)
+        lines.append(f"{ROLES[role]} — {html.escape(name)}")
+        other = "master" if role == "admin" else "admin"
+        rows.append([
+            InlineKeyboardButton(text=f"{name}: сделать {ROLES[other]}", callback_data=f"role:{uid}:{other}"),
+            InlineKeyboardButton(text="🗑", callback_data=f"del:{uid}"),
+        ])
+    return "Команда студии:\n\n" + "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-@admin_dp.message(Command("remove"))
-async def remove_master(message: Message):
+@admin_dp.message(Command("team"))
+async def show_team(message: Message):
     if not is_admin(message):
         return
-    parts = (message.text or "").split()
-    if len(parts) != 2 or not parts[1].isdigit() or int(parts[1]) not in ADMIN_IDS:
-        await message.answer("Пример: /remove 123456789 (номер можно посмотреть в /masters)")
+    text, kb = await team_view()
+    await message.answer(text, reply_markup=kb)
+
+
+@admin_dp.callback_query(F.data.startswith("role:") | F.data.startswith("del:"))
+async def on_team_edit(call: CallbackQuery):
+    if not is_admin(call):
+        await call.answer("Это может сделать только админ", show_alert=True)
         return
-    if len(ADMIN_IDS) == 1:
-        await message.answer("Нельзя убрать последнего мастера — сначала добавьте другого.")
+    parts = call.data.split(":")
+    uid = int(parts[1])
+    new_team = dict(TEAM)
+    if parts[0] == "role":
+        new_team[uid] = parts[2]
+    else:
+        new_team.pop(uid, None)
+    if "admin" not in new_team.values():
+        await call.answer("В команде должен остаться хотя бы один админ", show_alert=True)
         return
-    ADMIN_IDS.discard(int(parts[1]))
-    save_admins()
-    await message.answer("Готово ✅ Этот человек больше не получает записи.")
+    TEAM.clear(); TEAM.update(new_team); save_team()
+    text, kb = await team_view()
+    await call.message.edit_text(text, reply_markup=kb)
+    await call.answer("Готово ✅")
 
 
 @admin_dp.message(Command("bookings"))
 async def list_bookings(message: Message):
-    if not is_admin(message):
+    if not is_team(message):
         return
     items = upcoming()
     if not items:
@@ -300,7 +362,7 @@ async def list_bookings(message: Message):
 
 @admin_dp.message(Command("free"))
 async def free_slot(message: Message):
-    if not is_admin(message):
+    if not is_team(message):
         return
     parts = (message.text or "").split()[1:]
     slot = "T".join(parts) if len(parts) == 2 else (parts[0] if parts else "")
@@ -317,8 +379,8 @@ async def free_slot(message: Message):
 async def main():
     await bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await publish_busy()
-    if not ADMIN_IDS:
-        print("👉 Мастер: откройте @wwpnails_admin_bot и нажмите «Старт», чтобы получать уведомления.")
+    if not TEAM:
+        print("👉 Откройте @wwpnails_admin_bot и нажмите «Старт» — первый человек станет админом.")
     print("Боты WWP запущены! Не закрывайте это окно. Остановить: Ctrl+C")
     await asyncio.gather(dp.start_polling(bot, handle_signals=False), admin_dp.start_polling(admin_bot, handle_signals=False))
 
