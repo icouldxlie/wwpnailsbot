@@ -21,7 +21,8 @@ from datetime import datetime
 import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import KeyboardButton, MenuButtonDefault, Message, ReplyKeyboardMarkup, WebAppInfo
+from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
+                           MenuButtonDefault, Message, ReplyKeyboardMarkup, WebAppInfo)
 from dotenv import load_dotenv
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,8 +36,15 @@ MASTER_NAME = os.environ.get("MASTER_NAME", "Вера")
 
 
 def save_env(key: str, value: str):
-    with open(ENV_PATH, "a", encoding="utf-8") as f:
-        f.write(f"{key}={value}\n")
+    """Записывает или заменяет строку KEY=value в .env."""
+    try:
+        with open(ENV_PATH, encoding="utf-8") as f:
+            lines = [l for l in f.read().splitlines() if l and not l.startswith(key + "=")]
+    except FileNotFoundError:
+        lines = []
+    lines.append(f"{key}={value}")
+    with open(ENV_PATH, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 def ask(key: str, prompt: str) -> str:
@@ -50,7 +58,13 @@ def ask(key: str, prompt: str) -> str:
 BOT_TOKEN = ask("BOT_TOKEN", "1/3 Вставьте токен бота @wwpnailsbot и нажмите Enter: ")
 ADMIN_BOT_TOKEN = ask("ADMIN_BOT_TOKEN", "2/3 Вставьте токен бота уведомлений @wwpnails_admin_bot и нажмите Enter: ")
 GITHUB_TOKEN = ask("GITHUB_TOKEN", "3/3 Вставьте ключ GitHub (github_pat_...) и нажмите Enter: ")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0) or 0)
+# Мастера (может быть несколько) — им приходят уведомления о записях
+ADMIN_IDS = {int(x) for x in (os.environ.get("ADMIN_IDS", "") + "," + os.environ.get("ADMIN_ID", "")).split(",") if x.strip().isdigit()}
+
+
+def save_admins():
+    save_env("ADMIN_ID", "")  # старый формат (один мастер) больше не нужен
+    save_env("ADMIN_IDS", ",".join(str(i) for i in sorted(ADMIN_IDS)))
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(BOT_TOKEN)              # клиентский бот
@@ -113,14 +127,14 @@ def app_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
-async def notify_master(text: str):
-    if ADMIN_ID:
-        try:
-            await admin_bot.send_message(ADMIN_ID, text, parse_mode="HTML")
-        except Exception as e:  # noqa: BLE001
-            logging.warning("Не удалось отправить уведомление мастеру: %s", e)
-    else:
+async def notify_master(text: str, **kwargs):
+    if not ADMIN_IDS:
         logging.warning("Мастер ещё не нажал /start в боте уведомлений — уведомление не отправлено.")
+    for admin_id in list(ADMIN_IDS):
+        try:
+            await admin_bot.send_message(admin_id, text, parse_mode="HTML", **kwargs)
+        except Exception as e:  # noqa: BLE001
+            logging.warning("Не удалось отправить уведомление мастеру %s: %s", admin_id, e)
 
 
 # ---------- клиентский бот ----------
@@ -191,24 +205,85 @@ async def on_order(message: Message):
 
 
 # ---------- бот уведомлений (для мастера) ----------
-def is_admin(message: Message) -> bool:
-    return bool(ADMIN_ID) and message.from_user.id == ADMIN_ID
+def is_admin(message) -> bool:
+    return message.from_user.id in ADMIN_IDS
+
+
+ADMIN_HELP = (
+    "👑 Вы мастер WWP. Сюда будут приходить все новые записи.\n\n"
+    "/bookings — ближайшие записи\n"
+    "/free 2026-12-02 12:00 — освободить окошко\n"
+    "/masters — кто получает записи"
+)
 
 
 @admin_dp.message(CommandStart())
 async def admin_start(message: Message):
-    global ADMIN_ID
-    if not ADMIN_ID:
-        ADMIN_ID = message.from_user.id
-        save_env("ADMIN_ID", str(ADMIN_ID))
+    u = message.from_user
+    if not ADMIN_IDS:
+        ADMIN_IDS.add(u.id)
+        save_admins()
     if is_admin(message):
-        await message.answer(
-            "👑 Вы мастер WWP. Сюда будут приходить все новые записи.\n\n"
-            "/bookings — ближайшие записи\n"
-            "/free 2026-12-02 12:00 — освободить окошко"
-        )
+        await message.answer(ADMIN_HELP)
+        return
+    who = f"@{u.username}" if u.username else u.full_name
+    await message.answer("Запрос отправлен мастеру студии 🤍 Как только его одобрят, сюда начнут приходить записи.")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Разрешить", callback_data=f"add:{u.id}"),
+        InlineKeyboardButton(text="✖️ Нет", callback_data=f"deny:{u.id}"),
+    ]])
+    await notify_master(f"🔑 {html.escape(who)} ({html.escape(u.full_name)}) хочет получать записи студии.", reply_markup=kb)
+
+
+@admin_dp.callback_query(F.data.startswith("add:") | F.data.startswith("deny:"))
+async def on_access(call: CallbackQuery):
+    if not is_admin(call):
+        await call.answer("Только мастер может это сделать", show_alert=True)
+        return
+    action, uid = call.data.split(":")
+    uid = int(uid)
+    if action == "add":
+        ADMIN_IDS.add(uid)
+        save_admins()
+        await call.message.edit_text(call.message.text + "\n\n✅ Доступ выдан")
+        try:
+            await admin_bot.send_message(uid, ADMIN_HELP)
+        except Exception:  # noqa: BLE001
+            pass
     else:
-        await message.answer("Это служебный бот студии WWP. Записаться можно в @wwpnailsbot 💅")
+        await call.message.edit_text(call.message.text + "\n\n✖️ Отклонено")
+    await call.answer()
+
+
+@admin_dp.message(Command("masters"))
+async def list_masters(message: Message):
+    if not is_admin(message):
+        return
+    lines = []
+    for uid in sorted(ADMIN_IDS):
+        try:
+            ch = await admin_bot.get_chat(uid)
+            name = f"@{ch.username}" if ch.username else (ch.full_name or str(uid))
+        except Exception:  # noqa: BLE001
+            name = str(uid)
+        lines.append(f"• {name} — /remove {uid}")
+    await message.answer("Записи получают:\n" + "\n".join(lines) + "\n\nЧтобы убрать человека, отправьте команду /remove с его номером.")
+
+
+@admin_dp.message(Command("remove"))
+async def remove_master(message: Message):
+    if not is_admin(message):
+        return
+    parts = (message.text or "").split()
+    if len(parts) != 2 or not parts[1].isdigit() or int(parts[1]) not in ADMIN_IDS:
+        await message.answer("Пример: /remove 123456789 (номер можно посмотреть в /masters)")
+        return
+    if len(ADMIN_IDS) == 1:
+        await message.answer("Нельзя убрать последнего мастера — сначала добавьте другого.")
+        return
+    ADMIN_IDS.discard(int(parts[1]))
+    save_admins()
+    await message.answer("Готово ✅ Этот человек больше не получает записи.")
 
 
 @admin_dp.message(Command("bookings"))
@@ -242,7 +317,7 @@ async def free_slot(message: Message):
 async def main():
     await bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await publish_busy()
-    if not ADMIN_ID:
+    if not ADMIN_IDS:
         print("👉 Мастер: откройте @wwpnails_admin_bot и нажмите «Старт», чтобы получать уведомления.")
     print("Боты WWP запущены! Не закрывайте это окно. Остановить: Ctrl+C")
     await asyncio.gather(dp.start_polling(bot, handle_signals=False), admin_dp.start_polling(admin_bot, handle_signals=False))
