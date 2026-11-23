@@ -9,16 +9,25 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@700&family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0e0a0c; --card:#191215; --card2:#221a1e; --line:rgba(255,190,210,.12);
+    --bg:#0e0a0c; --card:rgba(30,17,24,.82); --card2:rgba(40,24,32,.9); --line:rgba(255,190,210,.12);
     --pink:#f2a3b8; --pink2:#d9748f; --deep:#5a1a2e;
     --text:#f7eaef; --muted:#a3909a;
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html,body{background:var(--bg);color:var(--text);font-family:'Manrope',system-ui,sans-serif}
-  body{min-height:100vh;overflow-x:hidden;padding-bottom:110px;
-    background:radial-gradient(120% 60% at 50% -10%,rgba(217,116,143,.22),transparent 60%),var(--bg)}
+  body{min-height:100vh;overflow-x:hidden;padding-bottom:110px;background:#1a0f15}
+  /* фон: тёмный розовый мех + мягкое свечение */
+  body::before{content:"";position:fixed;inset:-20px;z-index:0;pointer-events:none;
+    background:url("https://images.unsplash.com/photo-1516642898673-edd1ced08e87?auto=format&fit=crop&w=900&q=60") center/cover;
+    filter:blur(1.5px) saturate(1.15)}
+  body::after{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(70% 45% at 50% 0%,rgba(242,163,184,.30),transparent 70%),
+      radial-gradient(60% 40% at 0% 75%,rgba(170,120,210,.22),transparent 70%),
+      radial-gradient(60% 40% at 100% 100%,rgba(217,116,143,.22),transparent 70%),
+      linear-gradient(180deg,rgba(38,14,28,.80),rgba(20,9,16,.90) 45%,rgba(14,8,12,.94))}
   button{font:inherit;color:inherit}
-  .app{max-width:480px;margin:0 auto;padding:10px 16px 0;position:relative}
+  .app{max-width:480px;margin:0 auto;padding:10px 16px 0;position:relative;z-index:1}
   .screen{display:none;animation:fade .4s ease}
   .screen.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -123,10 +132,11 @@
   textarea{width:100%;margin-top:14px;border:1px solid var(--line);border-radius:18px;padding:12px 14px;font:14px 'Manrope';color:var(--text);background:var(--card2);resize:none;outline:none}
   textarea::placeholder{color:var(--muted)}
 
-  .cta{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;width:calc(100% - 32px);max-width:448px;z-index:5;
+  .cta{position:fixed;z-index:5;left:50%;transform:translateX(-50%);bottom:18px;width:calc(100% - 32px);max-width:448px;z-index:5;
     border:none;border-radius:22px;padding:18px;font:700 15px 'Unbounded',sans-serif;color:var(--bg);cursor:pointer;
     background:linear-gradient(135deg,#ffc3d2,var(--pink2));box-shadow:0 14px 34px -10px rgba(217,116,143,.6)}
   .cta[disabled]{opacity:.4}
+  .card,.box,.plate,.day,.slot,.size,.back,.tile{-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
   .hidden{display:none!important}
   .done{text-align:center;padding-top:30px}
   .done canvas{width:200px;height:200px;margin:0 auto;display:block}
@@ -358,7 +368,7 @@ document.getElementById('esoGrid').innerHTML = ESOTERIC.map(s =>
 
 if (tg) {
   tg.ready(); tg.expand();
-  try { tg.setHeaderColor('#0e0a0c'); tg.setBackgroundColor('#0e0a0c'); } catch(e){}
+  try { tg.setHeaderColor('#26101c'); tg.setBackgroundColor('#1a0f15'); } catch(e){}
   tg.MainButton.onClick(onCta);
   tg.BackButton.onClick(goBack);
 }
