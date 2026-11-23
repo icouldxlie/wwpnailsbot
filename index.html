@@ -412,6 +412,17 @@ const tg = window.Telegram && window.Telegram.WebApp;
 const inTg = !!(tg && tg.initData);
 const fmt = n => n.toLocaleString('ru-RU').replace(/[\u00a0,]/g,' ') + ' ₽';
 const BUSY = new Set((new URLSearchParams(location.search).get('busy') || '').split(',').filter(Boolean));
+// Живой список занятых окошек: бот обновляет busy.json на GitHub после каждой записи
+const BUSY_URL = 'https://api.github.com/repos/icouldxlie/wwpnailsbot/contents/busy.json';
+let LIVE = null;
+function refreshBusy(){
+  return fetch(BUSY_URL + '?t=' + Date.now(), { headers:{ Accept:'application/vnd.github.raw+json' }, cache:'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && Array.isArray(j.busy)) LIVE = new Set(j.busy); })
+    .catch(() => {});
+}
+const isBusy = key => LIVE ? LIVE.has(key) : BUSY.has(key);
+refreshBusy();
 const state = { type:null, design:false, size:null, mood:null, topic:null, date:null, time:null, screen:'home', history:[] };
 const WD = ['вс','пн','вт','ср','чт','пт','сб'];
 const MON = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
@@ -506,11 +517,15 @@ function freeTimes(ds){
   for (let m = toMin(h[0]); m + PROCEDURE_HOURS*60 <= toMin(h[1]); m += PROCEDURE_HOURS*60){
     const t = pad(Math.floor(m/60)) + ':' + pad(m%60), e = m + PROCEDURE_HOURS*60;
     const dt = new Date(ds + 'T' + t + ':00').getTime();
-    out.push({ t:t, end: pad(Math.floor(e/60)) + ':' + pad(e%60), busy: BUSY.has(ds + 'T' + t) || dt < now + 60*60*1000 });
+    out.push({ t:t, end: pad(Math.floor(e/60)) + ':' + pad(e%60), busy: isBusy(ds + 'T' + t) || dt < now + 60*60*1000 });
   }
   return out;
 }
 function openWhen(){
+  buildDays(); go('when');
+  refreshBusy().then(() => { if (state.screen === 'when') buildDays(); });   // подтягиваем свежую занятость
+}
+function buildDays(){
   const box = document.getElementById('days'); let html = ''; let first = null;
   const d0 = new Date(); d0.setHours(0,0,0,0);
   const lastMonth = [...SCHEDULED_MONTHS].sort().pop();               // запись открыта до конца последнего месяца с графиком
@@ -527,8 +542,8 @@ function openWhen(){
   }
   box.innerHTML = html;
   if (!state.date || !box.querySelector('[data-d="' + state.date + '"]:not(.off)')) state.date = first;
+  if (state.time && (freeTimes(state.date) || []).some(x => x.t === state.time && x.busy)) state.time = null;
   pickDay(state.date, true);
-  go('when');
 }
 function pickDay(ds, silent){
   if (!silent) haptic();
