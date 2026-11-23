@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Запись к мастеру</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ====== НАСТРОЙКИ ЦВЕТА ====== */
+  :root{
+    --bg:#fbf4f1;
+    --cream:#fffaf7;
+    --blush:#f6d9d6;
+    --rose:#e7b3b0;
+    --mauve:#b9878f;
+    --ink:#4a3438;
+    --muted:#9b8286;
+    --lilac:#e6dcf3;
+    --shadow:0 10px 30px -12px rgba(150,95,105,.35);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{background:var(--bg);color:var(--ink);font-family:'Manrope',system-ui,sans-serif;min-height:100%}
+  body{overflow-x:hidden;padding-bottom:110px}
+
+  /* пушистые облачка на фоне */
+  .fluff-bg{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+  .puff{position:absolute;border-radius:50%;filter:url(#fur) blur(.4px);opacity:.75}
+  .puff.p1{width:260px;height:260px;background:radial-gradient(circle at 40% 40%,#fff 0%,var(--blush) 70%);top:-90px;right:-80px}
+  .puff.p2{width:200px;height:200px;background:radial-gradient(circle at 40% 40%,#fff 0%,var(--lilac) 70%);top:38%;left:-110px}
+  .puff.p3{width:220px;height:220px;background:radial-gradient(circle at 40% 40%,#fff 0%,#f9e6dc 70%);bottom:-100px;right:-60px}
+
+  .app{position:relative;z-index:1;max-width:480px;margin:0 auto;padding:22px 18px}
+  .screen{display:none;animation:fade .45s ease}
+  .screen.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ====== ШАПКА МАСТЕРА ====== */
+  .hero{text-align:center;padding:14px 0 8px}
+  .avatar-wrap{position:relative;width:118px;height:118px;margin:0 auto 14px}
+  .avatar-fur{position:absolute;inset:-12px;border-radius:50%;
+    background:radial-gradient(circle,#fff 35%,var(--blush) 62%,var(--rose) 100%);filter:url(#fur)}
+  .avatar{position:absolute;inset:6px;border-radius:50%;background:linear-gradient(145deg,#fff,var(--blush));
+    display:grid;place-items:center;font-family:'Cormorant Garamond',serif;font-size:46px;color:var(--mauve);
+    box-shadow:inset 0 0 0 2px #fff}
+  .hello{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+  .master-name{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:40px;line-height:1.05;margin:6px 0 4px}
+  .tagline{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--mauve)}
+
+  .section-title{display:flex;align-items:center;gap:10px;margin:28px 4px 12px;
+    font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .section-title::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--rose),transparent)}
+
+  /* ====== КАРТОЧКИ ====== */
+  .card{position:relative;background:var(--cream);border-radius:26px;padding:18px 18px;
+    box-shadow:var(--shadow);cursor:pointer;transition:transform .2s ease,box-shadow .2s;overflow:hidden;
+    border:1px solid rgba(231,179,176,.35)}
+  .card:active{transform:scale(.98)}
+  .card + .card{margin-top:12px}
+  .card .pom{position:absolute;right:-26px;top:-26px;width:92px;height:92px;border-radius:50%;
+    background:radial-gradient(circle at 45% 45%,#fff 10%,var(--blush) 65%);filter:url(#fur);opacity:.9}
+  .card.lilac .pom{background:radial-gradient(circle at 45% 45%,#fff 10%,var(--lilac) 65%)}
+  .row{display:flex;align-items:center;gap:14px;position:relative}
+  .icon{flex:none;width:52px;height:52px;border-radius:18px;display:grid;place-items:center;font-size:24px;
+    background:linear-gradient(145deg,#fff,var(--blush))}
+  .lilac .icon{background:linear-gradient(145deg,#fff,var(--lilac))}
+  .card h3{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:23px;line-height:1.1}
+  .card p{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
+  .price{margin-left:auto;white-space:nowrap;font-weight:700;font-size:15px;color:var(--mauve)}
+  .arrow{margin-left:auto;color:var(--rose);font-size:20px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid2 .card{margin:0;padding:16px}
+  .grid2 .card h3{font-size:19px;margin-top:10px}
+  .grid2 .icon{width:44px;height:44px;font-size:20px;border-radius:15px}
+
+  /* ====== ВЫБОР ====== */
+  .back{display:inline-flex;align-items:center;gap:6px;border:none;background:none;color:var(--mauve);
+    font:600 14px 'Manrope';cursor:pointer;padding:6px 2px;margin-bottom:6px}
+  .page-title{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:34px;line-height:1.1;margin:4px 0 4px}
+  .page-sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+
+  .option{display:flex;align-items:center;gap:14px}
+  .radio{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--rose);display:grid;place-items:center;transition:.2s}
+  .radio::after{content:"";width:12px;height:12px;border-radius:50%;background:var(--mauve);transform:scale(0);transition:.2s}
+  .card.selected{border-color:var(--rose);box-shadow:0 0 0 2px var(--rose),var(--shadow)}
+  .card.selected .radio::after{transform:scale(1)}
+  .sizes{display:flex;gap:10px;margin-top:14px}
+  .size{flex:1;border:1.5px solid var(--blush);border-radius:18px;padding:10px;text-align:center;background:#fff;cursor:pointer;transition:.2s}
+  .size b{display:block;font-family:'Cormorant Garamond',serif;font-size:26px;line-height:1}
+  .size span{font-size:13px;color:var(--muted)}
+  .size.on{background:linear-gradient(145deg,#fff,var(--blush));border-color:var(--rose)}
+  .size.on span{color:var(--ink);font-weight:600}
+
+  .addon{display:flex;align-items:center;gap:12px;margin-top:14px;padding:12px 14px;border-radius:18px;background:#fff;border:1.5px dashed var(--rose)}
+  .addon .txt{flex:1;font-size:14px}
+  .addon .txt small{display:block;color:var(--muted);font-size:12px}
+  .switch{position:relative;width:48px;height:28px;border-radius:20px;background:#eedfdc;transition:.25s;flex:none}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.15);transition:.25s}
+  .switch.on{background:var(--mauve)}
+  .switch.on::after{left:23px}
+
+  /* ====== ВОПРОС: ПЛАШКИ ====== */
+  .question{font-family:'Cormorant Garamond',serif;font-size:31px;font-weight:600;line-height:1.15;text-align:center;margin:18px 6px 22px}
+  .plate{display:block;width:100%;text-align:left;border-radius:30px;padding:24px 22px;color:var(--ink);font-family:inherit}
+  .plate .emoji{font-size:30px}
+  .plate h3{font-size:25px;margin-top:10px}
+
+  /* ====== ИТОГ ====== */
+  .summary{background:var(--cream);border-radius:28px;padding:22px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .summary .pom{position:absolute;left:-30px;bottom:-30px;width:110px;height:110px;border-radius:50%;
+    background:radial-gradient(circle,#fff 10%,var(--blush) 65%);filter:url(#fur);opacity:.8}
+  .line{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px dashed var(--blush);font-size:15px;position:relative}
+  .line:last-of-type{border-bottom:none}
+  .line span:first-child{color:var(--muted)}
+  .total{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;padding-top:14px;border-top:1.5px solid var(--rose);position:relative}
+  .total b{font-family:'Cormorant Garamond',serif;font-size:36px;color:var(--mauve)}
+  textarea{width:100%;margin-top:16px;border:1.5px solid var(--blush);border-radius:18px;padding:12px 14px;font:14px 'Manrope';color:var(--ink);background:#fff;resize:none;outline:none}
+  textarea:focus{border-color:var(--rose)}
+
+  /* ====== НИЖНЯЯ КНОПКА (для браузера; в Telegram — MainButton) ====== */
+  .cta{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;width:calc(100% - 36px);max-width:444px;z-index:5;
+    border:none;border-radius:24px;padding:17px;font:700 16px 'Manrope';color:#fff;cursor:pointer;
+    background:linear-gradient(135deg,var(--rose),var(--mauve));box-shadow:0 14px 30px -10px rgba(150,95,105,.6);
+    transition:opacity .2s}
+  .cta[disabled]{opacity:.45}
+  .hidden{display:none!important}
+
+  .done{text-align:center;padding-top:60px}
+  .done .big{font-size:64px}
+  .foot{text-align:center;font-size:12px;color:var(--muted);margin-top:28px}
+</style>
+</head>
+<body>
+
+<!-- SVG‑фильтр «мех»: делает края элементов пушистыми -->
+<svg width="0" height="0" style="position:absolute">
+  <filter id="fur" x="-20%" y="-20%" width="140%" height="140%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="noise"/>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="9" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="fluff-bg"><div class="puff p1"></div><div class="puff p2"></div><div class="puff p3"></div></div>
+
+<div class="app">
+
+  <!-- ===== ГЛАВНАЯ ===== -->
+  <section class="screen active" id="home">
+    <div class="hero">
+      <div class="avatar-wrap"><div class="avatar-fur"></div><div class="avatar" id="avatarLetter">В</div></div>
+      <div class="hello">мастер маникюра · таролог</div>
+      <h1 class="master-name" id="masterName">Вера</h1>
+      <div class="tagline">нежные ногти и разговоры о судьбе</div>
+    </div>
+
+    <div class="section-title">Ногти</div>
+    <div class="card" onclick="openNails('mono')">
+      <div class="pom"></div>
+      <div class="row">
+        <div class="icon">💅</div>
+        <div><h3>Однотонные</h3><p>Ровное покрытие в один цвет.<br>Дизайн или френч — +222 ₽</p></div>
+        <div class="price">2 222 ₽</div>
+      </div>
+    </div>
+    <div class="card" onclick="openNails('ext')">
+      <div class="pom"></div>
+      <div class="row">
+        <div class="icon">✨</div>
+        <div><h3>Наращивание</h3><p>Размер L или XL</p></div>
+        <div class="price">от 2 999 ₽</div>
+      </div>
+    </div>
+
+    <div class="section-title">Таро и разборы</div>
+    <div class="grid2" id="esoGrid"></div>
+
+    <div class="foot">с любовью и мягкостью ♡</div>
+  </section>
+
+  <!-- ===== НОГТИ: ОДНОТОННЫЕ ===== -->
+  <section class="screen" id="mono">
+    <button class="back" onclick="go('home')">← Назад</button>
+    <h2 class="page-title">Однотонные ногти</h2>
+    <p class="page-sub">Аккуратное покрытие в один цвет</p>
+
+    <div class="card selected">
+      <div class="pom"></div>
+      <div class="row"><div class="icon">💅</div><div><h3>Однотонное покрытие</h3><p>Базовая стоимость</p></div><div class="price">2 222 ₽</div></div>
+      <div class="addon" onclick="toggleDesign(event)">
+        <div class="txt">Хочу дизайн или френч<small>добавляется к стоимости</small></div>
+        <b style="color:var(--mauve);font-size:14px">+222 ₽</b>
+        <div class="switch" id="designSwitch"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== НОГТИ: НАРАЩИВАНИЕ ===== -->
+  <section class="screen" id="ext">
+    <button class="back" onclick="go('home')">← Назад</button>
+    <h2 class="page-title">Наращивание</h2>
+    <p class="page-sub">Выберите длину</p>
+
+    <div class="card selected">
+      <div class="pom"></div>
+      <div class="row"><div class="icon">✨</div><div><h3>Размер ногтей</h3><p>Форма и цвет — обсудим с мастером</p></div></div>
+      <div class="sizes">
+        <div class="size" data-size="L" onclick="pickSize('L')"><b>L</b><span>2 999 ₽</span></div>
+        <div class="size" data-size="XL" onclick="pickSize('XL')"><b>XL</b><span>3 333 ₽</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ВОПРОС ===== -->
+  <section class="screen" id="mood">
+    <button class="back" onclick="go(state.from || 'home')">← Назад</button>
+    <div class="question">Как вы хотите провести процедуру с мастером?</div>
+
+    <button class="card plate" onclick="pickMood('silence')">
+      <div class="pom"></div>
+      <div class="emoji">☁️</div>
+      <h3>Хочу посидеть в тишине</h3>
+      <p>Спокойная музыка, минимум разговоров — просто отдыхаю</p>
+    </button>
+    <button class="card plate lilac" onclick="pickMood('talk')" style="margin-top:14px">
+      <div class="pom"></div>
+      <div class="emoji">🌸</div>
+      <h3>Хочу поговорить с мастером</h3>
+      <p>Лёгкая беседа, новости, истории — время пролетит</p>
+    </button>
+  </section>
+
+  <!-- ===== ИТОГ ===== -->
+  <section class="screen" id="summary">
+    <button class="back" onclick="go(state.kind==='nails' ? 'mood' : 'home')">← Назад</button>
+    <h2 class="page-title">Ваша запись</h2>
+    <p class="page-sub">Проверьте и отправьте мастеру</p>
+    <div class="summary">
+      <div class="pom"></div>
+      <div id="lines"></div>
+      <div class="total"><span>Итого</span><b id="total">0 ₽</b></div>
+      <textarea id="comment" rows="3" placeholder="Удобные дата и время, пожелания…"></textarea>
+    </div>
+  </section>
+
+  <!-- ===== ГОТОВО (если открыто в браузере) ===== -->
+  <section class="screen" id="done">
+    <div class="done">
+      <div class="big">🤍</div>
+      <h2 class="page-title">Заявка отправлена</h2>
+      <p class="page-sub">Мастер скоро напишет вам, чтобы подтвердить время</p>
+    </div>
+  </section>
+</div>
+
+<button class="cta hidden" id="cta" onclick="onCta()">Далее</button>
+
+<script>
+/* ====== НАСТРОЙКИ: имя мастера и услуги ====== */
+const MASTER_NAME = "Вера";
+const ESOTERIC = [
+  { id:"tarot",   icon:"🔮", title:"Таро",             desc:"Расклад на ваш вопрос",     price:null },
+  { id:"matrix",  icon:"🌀", title:"Матрица судьбы",   desc:"Разбор по дате рождения",   price:null },
+  { id:"natal",   icon:"🌙", title:"Натальная карта",  desc:"Астрологический разбор",    price:null },
+  { id:"chakras", icon:"🪷", title:"Разбор чакр",      desc:"Энергетический баланс",     price:null },
+];
+// price:null → «стоимость уточнит мастер». Укажите число, например price: 1500
+
+const PRICES = { mono:2222, design:222, L:2999, XL:3333 };
+
+/* ====== ЛОГИКА ====== */
+const tg = window.Telegram?.WebApp;
+const inTg = !!(tg && tg.initData);
+const fmt = n => n.toLocaleString('ru-RU').replace(/,/g,' ') + ' ₽';
+const state = { kind:null, type:null, design:false, size:null, mood:null, eso:null, from:null };
+
+document.getElementById('masterName').textContent = MASTER_NAME;
+document.getElementById('avatarLetter').textContent = MASTER_NAME[0];
+
+document.getElementById('esoGrid').innerHTML = ESOTERIC.map(s =>
+  '<div class="card lilac" onclick="pickEso(\'' + s.id + '\')"><div class="pom"></div>' +
+  '<div class="icon">' + s.icon + '</div><h3>' + s.title + '</h3><p>' + s.desc + '</p>' +
+  '<p style="color:var(--mauve);font-weight:700;margin-top:6px">' + (s.price ? fmt(s.price) : 'цена по запросу') + '</p></div>'
+).join('');
+
+if (tg) {
+  tg.ready(); tg.expand();
+  try { tg.setHeaderColor('#fbf4f1'); tg.setBackgroundColor('#fbf4f1'); } catch(e){}
+  tg.MainButton.setParams({ color:'#b9878f', text_color:'#ffffff' });
+  tg.MainButton.onClick(onCta);
+  tg.BackButton.onClick(() => document.querySelector('.screen.active .back')?.click());
+}
+
+function haptic(){ try{ tg?.HapticFeedback?.selectionChanged(); }catch(e){} }
+
+function go(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  window.scrollTo({top:0, behavior:'smooth'});
+  state.screen = id;
+  if (tg && inTg) (id === 'home' || id === 'done') ? tg.BackButton.hide() : tg.BackButton.show();
+  updateCta();
+}
+
+function openNails(type){
+  haptic();
+  Object.assign(state, { kind:'nails', type, design:false, size:null, mood:null, eso:null, from:type });
+  document.getElementById('designSwitch').classList.remove('on');
+  document.querySelectorAll('.size').forEach(s => s.classList.remove('on'));
+  go(type);
+}
+function toggleDesign(e){
+  e.stopPropagation(); haptic();
+  state.design = !state.design;
+  document.getElementById('designSwitch').classList.toggle('on', state.design);
+  updateCta();
+}
+function pickSize(sz){
+  haptic(); state.size = sz;
+  document.querySelectorAll('.size').forEach(s => s.classList.toggle('on', s.dataset.size === sz));
+  updateCta();
+}
+function pickMood(m){ haptic(); state.mood = m; renderSummary(); go('summary'); }
+function pickEso(id){
+  haptic();
+  Object.assign(state, { kind:'eso', eso:id, type:null, mood:null });
+  renderSummary(); go('summary');
+}
+
+function calc(){
+  const lines = []; let total = 0; let priceKnown = true;
+  if (state.kind === 'nails'){
+    if (state.type === 'mono'){
+      lines.push(['Однотонные ногти', fmt(PRICES.mono)]); total += PRICES.mono;
+      if (state.design){ lines.push(['Дизайн / френч', '+' + fmt(PRICES.design)]); total += PRICES.design; }
+    } else {
+      lines.push(['Наращивание, размер ' + state.size, fmt(PRICES[state.size])]); total += PRICES[state.size];
+    }
+    lines.push(['Атмосфера', state.mood === 'silence' ? '☁️ в тишине' : '🌸 поговорить с мастером']);
+  } else {
+    const s = ESOTERIC.find(x => x.id === state.eso);
+    lines.push([s.title, s.price ? fmt(s.price) : 'по запросу']);
+    if (s.price) total += s.price; else priceKnown = false;
+  }
+  return { lines, total, priceKnown };
+}
+function renderSummary(){
+  const { lines, total, priceKnown } = calc();
+  document.getElementById('lines').innerHTML = lines.map(([a,b]) => '<div class="line"><span>' + a + '</span><span>' + b + '</span></div>').join('');
+  document.getElementById('total').textContent = priceKnown ? fmt(total) : 'уточнит мастер';
+}
+
+function ctaConfig(){
+  const s = state.screen;
+  if (s === 'mono') return { text:'Далее · ' + fmt(PRICES.mono + (state.design ? PRICES.design : 0)), enabled:true };
+  if (s === 'ext')  return { text: state.size ? 'Далее · ' + fmt(PRICES[state.size]) : 'Выберите размер', enabled:!!state.size };
+  if (s === 'summary') return { text:'Записаться', enabled:true };
+  return null;
+}
+function updateCta(){
+  const cfg = ctaConfig(); const btn = document.getElementById('cta');
+  if (inTg){
+    btn.classList.add('hidden');
+    if (!cfg) return tg.MainButton.hide();
+    tg.MainButton.setText(cfg.text);
+    cfg.enabled ? tg.MainButton.enable() : tg.MainButton.disable();
+    tg.MainButton.setParams({ color: cfg.enabled ? '#b9878f' : '#d9c4c6' });
+    tg.MainButton.show();
+  } else {
+    if (!cfg) return btn.classList.add('hidden');
+    btn.classList.remove('hidden'); btn.textContent = cfg.text; btn.disabled = !cfg.enabled;
+  }
+}
+
+function onCta(){
+  const s = state.screen;
+  if (s === 'mono' || s === 'ext'){
+    if (s === 'ext' && !state.size) return;
+    haptic(); return go('mood');
+  }
+  if (s === 'summary') submit();
+}
+
+function submit(){
+  const { lines, total, priceKnown } = calc();
+  const payload = {
+    kind: state.kind,
+    items: lines.map(([a,b]) => a + ': ' + b),
+    total: priceKnown ? total : null,
+    mood: state.mood,
+    comment: document.getElementById('comment').value.trim().slice(0, 500),
+  };
+  try{ tg?.HapticFeedback?.notificationOccurred('success'); }catch(e){}
+  if (inTg){
+    tg.sendData(JSON.stringify(payload)); // бот получит заявку, приложение закроется
+  } else {
+    console.log('Заявка:', payload);
+    go('done');
+  }
+}
+</script>
+</body>
+</html>
